@@ -26,19 +26,24 @@ jobs:
           xcodegen generate
 
       - name: Build app (no signing)
+        id: build_app
+        continue-on-error: true
         run: |
+          set -o pipefail
+          mkdir -p build
           xcodebuild \
             -project setup/ios-webview/MegaRamIncidenciasiOS.xcodeproj \
             -scheme MegaRamIncidencias \
             -configuration Release \
             -sdk iphoneos \
-            -destination "generic/platform=iOS" \
             -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build
+            CODE_SIGN_IDENTITY="" \
+            clean build | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
+        if: steps.build_app.outcome == 'success'
         run: |
           APP_PATH="build/DerivedData/Build/Products/Release-iphoneos/Incidencias MegaRam.app"
           mkdir -p build/Payload
@@ -47,8 +52,23 @@ jobs:
           /usr/bin/zip -r MegaRamIncidencias-unsigned.ipa Payload
 
       - name: Upload IPA artifact
+        if: steps.build_app.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: MegaRamIncidencias-unsigned-ipa
           path: build/MegaRamIncidencias-unsigned.ipa
           if-no-files-found: error
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build/xcodebuild.log
+          if-no-files-found: warn
+
+      - name: Fail if build failed
+        if: steps.build_app.outcome != 'success'
+        run: |
+          echo "xcodebuild fallo. Revisa el artifact build-logs."
+          exit 1
