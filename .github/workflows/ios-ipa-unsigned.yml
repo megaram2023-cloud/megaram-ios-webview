@@ -43,8 +43,12 @@ jobs:
             clean build 2>&1 | tee build/xcodebuild.log
           BUILD_EXIT=${PIPESTATUS[0]}
           if [ "${BUILD_EXIT}" -ne 0 ]; then
-            TAIL_MSG=$(tail -n 80 build/xcodebuild.log | perl -pe 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
-            echo "::error title=xcodebuild failed::${TAIL_MSG}"
+            ERROR_LINES=$(grep -E "error:|fatal error:|requires a development team|CodeSign" build/xcodebuild.log | tail -n 25 || true)
+            if [ -z "${ERROR_LINES}" ]; then
+              ERROR_LINES=$(tail -n 80 build/xcodebuild.log)
+            fi
+            ERROR_MSG=$(printf "%s" "${ERROR_LINES}" | perl -pe 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+            echo "::error title=xcodebuild failed::${ERROR_MSG}"
           fi
           echo "exit_code=${BUILD_EXIT}" >> "$GITHUB_OUTPUT"
           exit 0
