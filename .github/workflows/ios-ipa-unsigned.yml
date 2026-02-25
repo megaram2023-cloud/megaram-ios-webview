@@ -27,7 +27,6 @@ jobs:
 
       - name: Build app (no signing)
         id: build_app
-        continue-on-error: true
         run: |
           set -o pipefail
           mkdir -p build
@@ -40,19 +39,26 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            clean build | tee build/xcodebuild.log
+            clean build 2>&1 | tee build/xcodebuild.log
+          BUILD_EXIT=${PIPESTATUS[0]}
+          echo "exit_code=${BUILD_EXIT}" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Package unsigned IPA
-        if: steps.build_app.outcome == 'success'
+        if: steps.build_app.outputs.exit_code == '0'
         run: |
-          APP_PATH="build/DerivedData/Build/Products/Release-iphoneos/Incidencias MegaRam.app"
+          APP_PATH=$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -n 1)
+          if [ -z "${APP_PATH}" ]; then
+            echo "No se encontro .app compilada"
+            exit 1
+          fi
           mkdir -p build/Payload
           cp -R "${APP_PATH}" build/Payload/
           cd build
           /usr/bin/zip -r MegaRamIncidencias-unsigned.ipa Payload
 
       - name: Upload IPA artifact
-        if: steps.build_app.outcome == 'success'
+        if: steps.build_app.outputs.exit_code == '0'
         uses: actions/upload-artifact@v4
         with:
           name: MegaRamIncidencias-unsigned-ipa
@@ -68,7 +74,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Fail if build failed
-        if: steps.build_app.outcome != 'success'
+        if: steps.build_app.outputs.exit_code != '0'
         run: |
-          echo "xcodebuild fallo. Revisa el artifact build-logs."
+          echo "xcodebuild fallo con exit code ${{ steps.build_app.outputs.exit_code }}. Revisa el artifact build-logs."
           exit 1
