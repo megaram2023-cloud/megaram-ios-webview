@@ -1,0 +1,37 @@
+workflows:
+  ios_webview_ipa:
+    name: iOS WebView IPA
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+      vars:
+        BUNDLE_ID: "com.megaram.incidenciasios"
+        XCODE_PROJECT: "setup/ios-webview/MegaRamIncidenciasiOS.xcodeproj"
+        XCODE_SCHEME: "MegaRamIncidencias"
+        START_URL: "https://proctological-caleb-seminiferous.ngrok-free.dev/ticket.html"
+      ios_signing:
+        distribution_type: development
+        bundle_identifier: com.megaram.incidenciasios
+    scripts:
+      - name: Install xcodegen
+        script: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+      - name: Generate Xcode project
+        script: |
+          cd setup/ios-webview
+          /usr/libexec/PlistBuddy -c "Set :StartURL ${START_URL}" Resources/Info.plist
+          xcodegen generate
+      - name: Apply signing profiles
+        script: |
+          xcode-project use-profiles --project "${XCODE_PROJECT}"
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --project "${XCODE_PROJECT}" \
+            --scheme "${XCODE_SCHEME}"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
